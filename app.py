@@ -5,7 +5,7 @@ from core.models import Token
 from core.price_source import fetch_eth_price_history
 from core.processor import RSIStrategy, log_signal
 from visual.chart import plot_rsi
-from core.telegram import send_telegram_message
+from core.telegram import send_telegram_image, send_telegram_message
 
 # === Load live price data ===
 def load_eth_prices():
@@ -26,14 +26,17 @@ plot_rsi(prices, rsi, token_symbol=token.symbol)
 # === Telegram Integration ===
 bot_token = "7533358664:AAF8BIYVAN_hP1WfM6NwAgYLe-0IPL7ieVw"
 chat_id = "7548797867"  # Replace this with your actual Telegram user ID
+chart_path = "visual/rsi_chart.png"
 
-message = f"📊 *Trading Signal Alert*\n" \
+# Combined message + chart caption
+caption = f"📊 *Trading Signal Alert*\n" \
           f"Token: `{signal.token_symbol}`\n" \
           f"Action: *{signal.signal_type}*\n" \
           f"Price: `${signal.price:.2f}`\n" \
           f"Time: `{signal.timestamp.strftime('%Y-%m-%d %H:%M:%S')}`"
 
-sent = send_telegram_message(bot_token, chat_id, message)
+# Send just the chart with embedded message
+sent = send_telegram_image(bot_token, chat_id, image_path=chart_path, caption=caption)
 
 if sent:
     print("✅ Signal sent to Telegram.")
