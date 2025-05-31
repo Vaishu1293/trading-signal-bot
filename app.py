@@ -1,44 +1,51 @@
-import pandas as pd
 import os
 from core.indicators import calculate_rsi
 from core.models import Token
-from core.price_source import fetch_eth_price_history
+from core.price_source import fetch_token_price_history
 from core.processor import RSIStrategy, log_signal
 from visual.chart import plot_rsi
-from core.telegram import send_telegram_image, send_telegram_message
+from core.telegram import send_telegram_image
 
-# === Load live price data ===
-def load_eth_prices():
-    return fetch_eth_price_history(days=30)
+# === Configuration ===
+bot_token = os.getenv("BOT_TOKEN", "7533358664:AAF8BIYVAN_hP1WfM6NwAgYLe-0IPL7ieVw")
+chat_id = os.getenv("CHAT_ID", "7548797867")  # Replace with your real chat ID if needed
 
-# === Main Runner ===
-prices = load_eth_prices()
-token = Token("ETH", prices)
-rsi = calculate_rsi(prices)
-strategy = RSIStrategy()
-signal = strategy.generate_signals(token)
+# Tokens to track (symbol → CoinGecko ID)
+tokens_to_track = {
+    "ETH": "ethereum",
+    "BTC": "bitcoin",
+    "SOL": "solana"
+}
 
-# === Output ===
-print(signal.to_dict())
-log_signal(signal)
-plot_rsi(prices, rsi, token_symbol=token.symbol)
+# === Main Execution Loop ===
+for symbol, coingecko_id in tokens_to_track.items():
+    try:
+        print(f"📥 Fetching data for {symbol}...")
+        prices = fetch_token_price_history(coingecko_id)
+        token = Token(symbol, prices)
+        rsi = calculate_rsi(prices)
 
-# === Telegram Integration ===
-bot_token = "7533358664:AAF8BIYVAN_hP1WfM6NwAgYLe-0IPL7ieVw"
-chat_id = "7548797867"  # Replace this with your actual Telegram user ID
-chart_path = "visual/rsi_chart.png"
+        strategy = RSIStrategy()
+        signal = strategy.generate_signals(token)
 
-# Combined message + chart caption
-caption = f"📊 *Trading Signal Alert*\n" \
-          f"Token: `{signal.token_symbol}`\n" \
-          f"Action: *{signal.signal_type}*\n" \
-          f"Price: `${signal.price:.2f}`\n" \
-          f"Time: `{signal.timestamp.strftime('%Y-%m-%d %H:%M:%S')}`"
+        # Log + save chart
+        log_signal(signal)
+        chart_path = f"visual/{symbol.lower()}_rsi_chart.png"
+        plot_rsi(prices, rsi, token_symbol=symbol, save_path=chart_path)
 
-# Send just the chart with embedded message
-sent = send_telegram_image(bot_token, chat_id, image_path=chart_path, caption=caption)
+        # Prepare caption
+        caption = f"📊 *{symbol} Trading Signal*\n" \
+                  f"Action: *{signal.signal_type}*\n" \
+                  f"Price: `${signal.price:.2f}`\n" \
+                  f"Time: `{signal.timestamp.strftime('%Y-%m-%d %H:%M:%S')}`"
 
-if sent:
-    print("✅ Signal sent to Telegram.")
-else:
-    print("❌ Failed to send Telegram message.")
+        # Send chart + caption to Telegram
+        sent = send_telegram_image(bot_token, chat_id, image_path=chart_path, caption=caption)
+
+        if sent:
+            print(f"✅ {symbol} signal sent to Telegram.")
+        else:
+            print(f"❌ Failed to send {symbol} signal.")
+
+    except Exception as e:
+        print(f"🚨 Error processing {symbol}: {e}")
